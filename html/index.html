@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<link href="style.css" rel="stylesheet" type="text/css" />
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+	<script src="nui://game/ui/jquery.js" type="text/javascript"></script>
+	<style>
+		.general { display: none; }
+	</style>
+</head>
+<body>
+	<div class="bank-wrap">
+		<div class="general">
+			<div class="main panel">
+				<header class="panel-header">
+					<div class="header-avatar-wrap">
+						<img id="headerAvatarImg" class="header-avatar-img" src="" alt="" referrerpolicy="no-referrer">
+						<i class="fas fa-user header-avatar-fallback"></i>
+					</div>
+					<div class="header-text">
+						<span class="header-name username1"></span>
+						<span class="header-balance"><span class="header-balance-label"></span> <span class="curbalance"></span></span>
+					</div>
+					<button type="button" id="closeBank" class="header-close" aria-label="" data-locale-aria="nui.close"><i class="fas fa-times"></i></button>
+				</header>
+				<nav class="menu-buttons">
+					<button type="button" data-action="deposit" class="menu-btn active"><i class="fas fa-arrow-down"></i><span data-locale="nui.btndeposit"></span></button>
+					<button type="button" data-action="withdraw" class="menu-btn"><i class="fas fa-arrow-up"></i><span data-locale="nui.btnwithdraw"></span></button>
+					<button type="button" data-action="transfer" class="menu-btn"><i class="fas fa-right-left"></i><span data-locale="nui.btntransfer"></span></button>
+				</nav>
+				<section class="action-strip">
+					<div id="strip-deposit" class="strip-content">
+						<input id="amount" type="number" min="1" placeholder="" data-locale-placeholder="nui.placeholderamount">
+						<button type="button" id="doDeposit" class="btn btn-primary"><i class="fas fa-check"></i> <span data-locale="nui.btndeposit"></span></button>
+					</div>
+					<div id="strip-withdraw" class="strip-content hidden">
+						<input id="amountw" type="number" min="1" placeholder="" data-locale-placeholder="nui.placeholderamount">
+						<button type="button" id="doWithdraw" class="btn btn-primary"><i class="fas fa-check"></i> <span data-locale="nui.btnwithdraw"></span></button>
+					</div>
+					<div id="strip-transfer" class="strip-content hidden">
+						<input id="to" type="number" min="1" placeholder="" data-locale-placeholder="nui.placeholderplayerid">
+						<input id="amountt" type="number" min="1" placeholder="" data-locale-placeholder="nui.placeholderamount">
+						<button type="button" id="doTransfer" class="btn btn-primary"><i class="fas fa-paper-plane"></i> <span data-locale="nui.btntransfer"></span></button>
+					</div>
+				</section>
+				<section class="main-log">
+					<h2 class="log-title"><i class="fas fa-clock-rotate-left"></i> <span data-locale="nui.logtitle"></span></h2>
+					<div class="log-filter-row">
+						<span class="log-filter-label"><i class="fas fa-calendar-alt"></i> <span data-locale="nui.logdate"></span></span>
+						<div class="custom-dropdown custom-dropdown-calendar" id="log-date-dropdown">
+							<button type="button" class="custom-dropdown-trigger" id="log-date-trigger" aria-expanded="false" aria-haspopup="dialog">
+								<span class="custom-dropdown-value" id="log-date-value" data-locale="nui.alldates"></span>
+								<i class="fas fa-chevron-down custom-dropdown-chevron"></i>
+							</button>
+						</div>
+					</div>
+					<div class="log-list" id="transactionList">
+						<p class="log-empty" id="logEmpty" data-locale="nui.notransactions"></p>
+					</div>
+				</section>
+			</div>
+		</div>
+	</div>
+	<div class="custom-dropdown-panel calendar-panel" id="log-date-panel" aria-hidden="true" style="display: none;">
+		<div class="calendar-header">
+			<button type="button" class="calendar-nav" id="calendar-prev" aria-label="" data-locale-aria="nui.prevmonth"><i class="fas fa-chevron-left"></i></button>
+			<span class="calendar-month-year" id="calendar-month-year"></span>
+			<button type="button" class="calendar-nav" id="calendar-next" aria-label="" data-locale-aria="nui.nextmonth"><i class="fas fa-chevron-right"></i></button>
+		</div>
+		<div class="calendar-weekdays" id="calendar-weekdays"></div>
+		<div class="calendar-grid" id="calendar-grid"></div>
+		<div class="calendar-footer">
+			<button type="button" class="calendar-clear-btn" id="calendar-clear" data-locale="nui.calendarclear"></button>
+		</div>
+	</div>
+
+	<script>
+	$(function() {
+		var $general = $('.general');
+		var currentAction = 'deposit';
+		var allTransactions = [];
+		var selectedDateFilter = null;
+		var calendarView = { year: new Date().getFullYear(), month: new Date().getMonth() };
+		var nuiResource = 'new_banking';
+		var locale = {};
+
+		function t(key) {
+			return locale[key] != null ? locale[key] : key;
+		}
+
+		function nuiUrl(path) {
+			return 'https://' + nuiResource + '/' + path;
+		}
+
+		function applyLocale(loc) {
+			if (!loc) return;
+			locale = loc;
+			$('[data-locale]').each(function() {
+				var key = $(this).data('locale');
+				if (key) $(this).text(t(key));
+			});
+			$('[data-locale-placeholder]').each(function() {
+				var key = $(this).data('locale-placeholder');
+				if (key) $(this).attr('placeholder', t(key));
+			});
+			$('[data-locale-aria]').each(function() {
+				var key = $(this).data('locale-aria');
+				if (key) $(this).attr('aria-label', t(key));
+			});
+			$('#closeBank').attr('aria-label', t('nui.close'));
+			$('.header-balance-label').text(t('nui.balance'));
+			$('#logEmpty').text(t('nui.notransactions'));
+			$('#log-date-value').text(t('nui.alldates'));
+			$('#calendar-clear').text(t('nui.calendarclear'));
+			var $wd = $('#calendar-weekdays');
+			if ($wd.length) {
+				$wd.empty().append(
+					'<span>' + t('nui.weekdaymon') + '</span><span>' + t('nui.weekdaytue') + '</span><span>' + t('nui.weekdaywed') + '</span><span>' + t('nui.weekdaythu') + '</span><span>' + t('nui.weekdayfri') + '</span><span>' + t('nui.weekdaysat') + '</span><span>' + t('nui.weekdaysun') + '</span>'
+				);
+			}
+		}
+
+		function pad2(n) {
+			return (n < 10) ? ('0' + n) : ('' + n);
+		}
+
+		function closeBank() {
+			$general.css('display', 'none');
+			$.post(nuiUrl('setBlurState'), JSON.stringify({ enabled: false }));
+			$.post(nuiUrl('NUIFocusOff'), JSON.stringify({}));
+		}
+
+		function showBank() {
+			$general.css('display', 'flex');
+			$.post(nuiUrl('setBlurState'), JSON.stringify({ enabled: true }));
+		}
+
+		function setAction(action) {
+			currentAction = action;
+			$('.menu-btn').removeClass('active');
+			$('.menu-btn[data-action="' + action + '"]').addClass('active');
+			$('.strip-content').addClass('hidden');
+			$('#strip-' + action).removeClass('hidden');
+		}
+
+		function timeToDateKey(timeStr) {
+			if (!timeStr || typeof timeStr !== 'string') return '';
+			var parts = timeStr.trim().split(/\s+/);
+			if (parts.length < 1) return '';
+			var dmy = parts[0].split('.');
+			if (dmy.length !== 3) return '';
+			return dmy[2] + '-' + dmy[1] + '-' + dmy[0];
+		}
+
+		function applyFilterAndRender() {
+			var list = allTransactions;
+			if (selectedDateFilter) {
+				list = allTransactions.filter(function(t) { return timeToDateKey(t.time) === selectedDateFilter; });
+			}
+			renderTransactions(list);
+			if (list.length === 0) $('#logEmpty').show(); else $('#logEmpty').hide();
+		}
+
+		function renderTransactions(list) {
+			var $list = $('#transactionList');
+			$list.find('.log-item').remove();
+			var icons = { deposit: 'fa-arrow-down-to-line', withdraw: 'fa-arrow-up-from-line', transfer_sent: 'fa-right-from-bracket', transfer_received: 'fa-right-to-bracket' };
+			var labels = { deposit: t('nui.logtypedeposit'), withdraw: t('nui.logtypewithdraw'), transfer_sent: t('nui.logtypesent'), transfer_received: t('nui.logtypereceived') };
+			var classes = { deposit: 'log-plus', withdraw: 'log-minus', transfer_sent: 'log-minus', transfer_received: 'log-plus' };
+			list.forEach(function(t) {
+				var sign = (t.type === 'deposit' || t.type === 'transfer_received') ? '+' : '-';
+				var extra = t.extra ? ' <span class="log-extra">' + t.extra + '</span>' : '';
+				var $row = $('<div class="log-item ' + (classes[t.type] || '') + '">' +
+					'<i class="fas ' + (icons[t.type] || 'fa-circle') + '"></i>' +
+					'<span class="log-label">' + (labels[t.type] || t.type) + '</span>' +
+					'<span class="log-amount">' + sign + '$' + t.amount + '</span>' +
+					'<span class="log-time">' + t.time + '</span>' + extra + '</div>');
+				$list.append($row);
+			});
+		}
+
+		function isFutureDate(key) {
+			var today = new Date();
+			var todayKey = today.getFullYear() + '-' + pad2(today.getMonth() + 1) + '-' + pad2(today.getDate());
+			return key > todayKey;
+		}
+
+		function buildCalendar() {
+			var y = calendarView.year;
+			var m = calendarView.month;
+			var first = new Date(y, m, 1);
+			var last = new Date(y, m + 1, 0);
+			var startDay = (first.getDay() + 6) % 7;
+			var daysInMonth = last.getDate();
+			var monthNames = [t('nui.month1'), t('nui.month2'), t('nui.month3'), t('nui.month4'), t('nui.month5'), t('nui.month6'), t('nui.month7'), t('nui.month8'), t('nui.month9'), t('nui.month10'), t('nui.month11'), t('nui.month12')];
+			$('#calendar-month-year').text(monthNames[m] + ' ' + y);
+			var $grid = $('#calendar-grid').empty();
+			var today = new Date();
+			var todayKey = today.getFullYear() + '-' + pad2(today.getMonth() + 1) + '-' + pad2(today.getDate());
+			for (var i = 0; i < startDay; i++) {
+				var prev = new Date(y, m, 1 - (startDay - i));
+				var key = prev.getFullYear() + '-' + pad2(prev.getMonth() + 1) + '-' + pad2(prev.getDate());
+				var cls = 'calendar-cell other-month';
+				if (isFutureDate(key)) cls += ' future';
+				$grid.append('<button type="button" class="' + cls + '" data-date="' + key + '" title="' + t('nui.prevmonthday') + '">' + prev.getDate() + '</button>');
+			}
+			for (var d = 1; d <= daysInMonth; d++) {
+				var key = y + '-' + pad2(m + 1) + '-' + pad2(d);
+				var cls = 'calendar-cell';
+				if (key === todayKey) cls += ' today';
+				if (key === selectedDateFilter) cls += ' selected';
+				if (isFutureDate(key)) cls += ' future';
+				$grid.append('<button type="button" class="' + cls + '" data-date="' + key + '">' + d + '</button>');
+			}
+			var remaining = 42 - (startDay + daysInMonth);
+			for (var j = 1; j <= remaining; j++) {
+				var next = new Date(y, m + 1, j);
+				var key = next.getFullYear() + '-' + pad2(next.getMonth() + 1) + '-' + pad2(next.getDate());
+				var cls = 'calendar-cell other-month';
+				if (isFutureDate(key)) cls += ' future';
+				$grid.append('<button type="button" class="' + cls + '" data-date="' + key + '" title="' + t('nui.nextmonthday') + '">' + next.getDate() + '</button>');
+			}
+		}
+
+		function openDatePanel() {
+			var $panel = $('#log-date-panel');
+			var $trigger = $('#log-date-trigger');
+			var rect = $trigger[0].getBoundingClientRect();
+			$panel.css({
+				display: 'block',
+				top: (rect.bottom + 6) + 'px',
+				left: rect.left + 'px',
+				minWidth: '280px',
+				visibility: 'visible',
+				opacity: '1'
+			}).attr('aria-hidden', 'false').addClass('open');
+			$trigger.attr('aria-expanded', 'true');
+			calendarView = { year: selectedDateFilter ? parseInt(selectedDateFilter.split('-')[0], 10) : new Date().getFullYear(), month: selectedDateFilter ? parseInt(selectedDateFilter.split('-')[1], 10) - 1 : new Date().getMonth() };
+			buildCalendar();
+		}
+
+		function closeDatePanel() {
+			$('#log-date-panel').css({ display: 'none', top: '', left: '', minWidth: '' }).attr('aria-hidden', 'true').removeClass('open');
+			$('#log-date-trigger').attr('aria-expanded', 'false');
+		}
+
+		window.addEventListener('message', function(event) {
+			var d = event.data;
+			if (d.resourceName) nuiResource = d.resourceName;
+			if (d.type === 'openGeneral') {
+				if (d.locale) applyLocale(d.locale);
+				showBank();
+				setAction('deposit');
+			} else if (d.type === 'balanceHUD') {
+				$general.css('display', 'flex');
+				$('.header-name.username1').text(d.player);
+				var num = parseInt(d.balance, 10) || 0;
+				var balanceStr = '' + num;
+				while (balanceStr.length < 5) balanceStr = '0' + balanceStr;
+				$('.curbalance').text(balanceStr);
+				var $img = $('#headerAvatarImg');
+				var $fallback = $('.header-avatar-fallback');
+				if (d.avatar && String(d.avatar).length > 5) {
+					$img.off('error').on('error', function() {
+						$img.hide();
+						$fallback.show();
+					});
+					$img.attr('src', d.avatar);
+					$img.show();
+					$fallback.hide();
+				} else {
+					$img.attr('src', '').hide();
+					$fallback.show();
+				}
+				allTransactions = (d.transactions && d.transactions.length) ? d.transactions : [];
+				applyFilterAndRender();
+			} else if (d.type === 'closeAll') {
+				$general.css('display', 'none');
+				$.post(nuiUrl('setBlurState'), JSON.stringify({ enabled: false }));
+			}
+		});
+
+		$('#closeBank').on('click', closeBank);
+
+		$('.menu-btn[data-action]').on('click', function() {
+			setAction($(this).data('action'));
+		});
+
+		$('#doDeposit').on('click', function() {
+			var amt = $('#amount').val();
+			if (!amt || parseInt(amt, 10) < 1) return;
+			$.post(nuiUrl('deposit'), JSON.stringify({ amount: amt }));
+		});
+
+		$('#doWithdraw').on('click', function() {
+			var amt = $('#amountw').val();
+			if (!amt || parseInt(amt, 10) < 1) return;
+			$.post(nuiUrl('withdrawl'), JSON.stringify({ amountw: amt }));
+		});
+
+		$('#doTransfer').on('click', function() {
+			var to = $('#to').val();
+			var amt = $('#amountt').val();
+			if (!to || !amt || parseInt(amt, 10) < 1) return;
+			$.post(nuiUrl('transfer'), JSON.stringify({ to: to, amountt: amt }));
+		});
+
+		$(document).on('click', function(e) {
+			if (!$('#log-date-panel').hasClass('open')) return;
+			if ($(e.target).closest('#log-date-dropdown').length) return;
+			if ($(e.target).closest('#log-date-panel').length) return;
+			closeDatePanel();
+		});
+
+		$('#log-date-trigger').on('click', function(e) {
+			e.preventDefault();
+			e.stopPropagation();
+			if ($('#log-date-panel').hasClass('open')) closeDatePanel(); else openDatePanel();
+		});
+
+		$(document).on('click', '#log-date-dropdown', function(e) { e.stopPropagation(); });
+
+		$(document).on('click', '#calendar-prev', function(e) {
+			e.preventDefault();
+			e.stopPropagation();
+			if (calendarView.month === 0) { calendarView.year--; calendarView.month = 11; } else calendarView.month--;
+			buildCalendar();
+		});
+
+		$(document).on('click', '#calendar-next', function(e) {
+			e.preventDefault();
+			e.stopPropagation();
+			if (calendarView.month === 11) { calendarView.year++; calendarView.month = 0; } else calendarView.month++;
+			buildCalendar();
+		});
+
+		$(document).on('click', '#calendar-grid .calendar-cell', function(e) {
+			e.preventDefault();
+			e.stopPropagation();
+			if ($(this).hasClass('future')) return;
+			var key = $(this).attr('data-date');
+			if (!key) return;
+			selectedDateFilter = key;
+			var parts = key.split('-');
+			$('#log-date-value').text(parts[2] + '.' + parts[1] + '.' + parts[0]);
+			applyFilterAndRender();
+			buildCalendar();
+		});
+
+		$(document).on('click', '#calendar-clear', function(e) {
+			e.preventDefault();
+			e.stopPropagation();
+			selectedDateFilter = null;
+			$('#log-date-value').text(t('nui.alldates'));
+			applyFilterAndRender();
+			buildCalendar();
+		});
+
+		document.onkeyup = function(data) {
+			if (data.which === 27) {
+				if ($('#log-date-panel').hasClass('open')) closeDatePanel(); else closeBank();
+			}
+		};
+	});
+	</script>
+</body>
+</html>
