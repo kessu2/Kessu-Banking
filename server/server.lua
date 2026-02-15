@@ -58,6 +58,11 @@ local function avatar(source)
 	return a
 end
 
+local function getSteamName(source)
+	local name = GetPlayerName(source)
+	return (name and name ~= '' and name) or nil
+end
+
 local function balancePayload(source, xPlayer)
 	if not xPlayer then return nil end
 	return {
@@ -65,7 +70,7 @@ local function balancePayload(source, xPlayer)
 		balance = xPlayer.getAccount('bank').money,
 		transactions = logGet(xPlayer.identifier, 20),
 		avatar = avatar(source),
-		playerName = xPlayer.getName(),
+		playerName = getSteamName(source),
 	}
 end
 
